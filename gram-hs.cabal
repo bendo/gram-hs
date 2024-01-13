@@ -6,12 +6,12 @@ cabal-version: 2.2
 
 name:           gram-hs
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/gram-hs#readme>
-homepage:       https://github.com/githubuser/gram-hs#readme
-bug-reports:    https://github.com/githubuser/gram-hs/issues
-author:         Author name here
-maintainer:     example@example.com
-copyright:      2023 Author name here
+description:    Please see the README on GitHub at <https://github.com/bendo/gram-hs#readme>
+homepage:       https://github.com/bendo/gram-hs#readme
+bug-reports:    https://github.com/bendo/gram-hs/issues
+author:         bendo
+maintainer:     bendo.dev@skiff.com
+copyright:      2023 bendo
 license:        BSD-3-Clause
 license-file:   LICENSE
 build-type:     Simple
@@ -21,11 +21,11 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/gram-hs
+  location: https://github.com/bendo/gram-hs
 
 library
   exposed-modules:
-      Lib
+      App
   other-modules:
       Paths_gram_hs
   autogen-modules:
@@ -35,6 +35,7 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
+    , optparse-applicative
   default-language: Haskell2010
 
 executable gram-hs-exe
@@ -49,6 +50,7 @@ executable gram-hs-exe
   build-depends:
       base >=4.7 && <5
     , gram-hs
+    , optparse-applicative
   default-language: Haskell2010
 
 test-suite gram-hs-test
@@ -64,4 +66,5 @@ test-suite gram-hs-test
   build-depends:
       base >=4.7 && <5
     , gram-hs
+    , optparse-applicative
   default-language: Haskell2010
