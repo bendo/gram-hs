@@ -21,7 +21,10 @@ description:         Please see the README on GitHub at <https://github.com/bend
 
 dependencies:
 - base >= 4.7 && < 5
+- directory
 - optparse-applicative
+- sqlite-simple
+- text
 
 ghc-options:
 - -Wall
