@@ -7,11 +7,15 @@ module App
 
 import           Control.Applicative
 import qualified Data.Text                      as T
+import           Data.Time
 import           Database.SQLite.Simple
-import           Database.SQLite.Simple.FromRow
+import           Database.SQLite.Simple.ToField
+import           Database.SQLite.Simple.FromField
 import           Options.Applicative
+import           System.Console.ANSI
 import           System.Directory
-import           System.IO
+import           System.IO                      (stdout)
+import Data.Data (Typeable)
 
 appHead :: String
 appHead = "Grammatik Aktiv SRS system"
@@ -29,20 +33,47 @@ appVersion = "gram 1.0.0 \n\
     \\n\
     \Written by bendo."
 
-data Shortcut = T | A | G | M | E | B deriving Show
+data Lesson = Lesson T.Text Shortcut T.Text deriving Show
+
+instance FromRow Lesson where
+    fromRow = Lesson <$> field <*> field <*> field
+
+instance ToRow Lesson where
+    toRow (Lesson lesson level due_date) = toRow (lesson, level, due_date)
+
+data Shortcut = T | A | G | M | E | B deriving (Eq, Ord, Read, Show, Typeable)
+
+instance ToField Shortcut where
+    toField = toField . show
+
+instance FromField Shortcut where
+    fromField f =
+        fromField f >>= parse . reads
+      where
+        parse ((s,""):_) = return s
+        parse _  = returnError ConversionFailed f "invalid Shortcut field"
 
 data Name = TODO | APPRENTICE | GURU | MASTER | ENLIGHTENED | BURNED deriving Show
 
-data Color = RED | GREEN | ORANGE | BLUE | PINK | DARK | NONE deriving Show
+data Level = Level Shortcut Name SGR deriving Show
 
-data Level = Level Shortcut Name (Maybe Color) deriving Show
+myColor = SetColor Foreground Dull
 
-levelT = Level T TODO Nothing
-levelA = Level A APPRENTICE (Just PINK)
-levelG = Level G GURU (Just ORANGE)
-levelM = Level M MASTER (Just GREEN)
-levelE = Level E ENLIGHTENED (Just BLUE)
-levelB = Level B BURNED (Just DARK)
+bold = SetConsoleIntensity BoldIntensity
+
+magenta = myColor Magenta
+yellow = myColor Yellow
+green = myColor Green
+blue = myColor Blue
+black = myColor Black
+nothing = Reset
+
+levelT = Level T TODO nothing
+levelA = Level A APPRENTICE magenta
+levelG = Level G GURU yellow
+levelM = Level M MASTER green
+levelE = Level E ENLIGHTENED blue
+levelB = Level B BURNED black
 
 getShortcut :: Level -> Shortcut
 getShortcut (Level shortcut _ _) = shortcut
@@ -50,7 +81,7 @@ getShortcut (Level shortcut _ _) = shortcut
 getName :: Level -> Name
 getName (Level _ name _) = name
 
-getColor :: Level -> Maybe Color
+getColor :: Level -> SGR
 getColor (Level _ _ color) = color
 
 data Options = Options
@@ -75,7 +106,7 @@ app = do
     appDir <- getXdgDirectory XdgData "gram"
     createDirectoryIfMissing True appDir
     conn <- open $ appDir ++ "/gram.db"
-    execute_ conn "CREATE TABLE IF NOT EXISTS test (id INTEGER PRIMARY KEY, str TEXT)"
+    execute_ conn "CREATE TABLE IF NOT EXISTS lesson (lesson TEXT, level TEXT, due_date TEXT)"
     close conn
     prompt =<< execParser opts
   where
@@ -84,6 +115,12 @@ app = do
      <> progDesc appDesc
      <> header appHead )
 
+getDBPath :: IO FilePath
+getDBPath = do getXdgDirectory XdgData "gram/gram.db"
+
+addLesson :: ToRow q => Connection -> q -> IO ()
+addLesson conn = execute conn "INSERT INTO lesson (lesson, level, due_date) VALUES (?,?,?)"
+
 prompt :: Options -> IO ()
 prompt (Options lesson False False False) = add' lesson
 prompt (Options _ True False False)       = count'
@@ -91,16 +128,95 @@ prompt (Options _ False True False)       = todo'
 prompt (Options _ False False True)       = view'
 prompt _                                  = return ()
 
-add' :: Show a => Maybe a -> IO ()
+getLesson :: Lesson -> String
+getLesson (Lesson lesson _ _) = T.unpack lesson
+
+getLevel :: Lesson -> Shortcut
+getLevel (Lesson _ level _) = level
+
+getDueDate :: Lesson -> String
+getDueDate (Lesson _ _ dueDate) = T.unpack dueDate
+
+add' :: Maybe String -> IO ()
 add' lesson = case lesson of
-    Just l  -> putStrLn $ "Adding lesson " ++ show l ++ "."
+    Just l  -> do
+        let r = read l :: Int
+        if r < 1 || r > 80
+            then
+                putStrLn "Lesson has to be in interval 1 to 80."
+            else
+                do
+                    putStrLn $ "Adding lesson " ++ show r ++ "."
+                    dbPath <- getDBPath
+                    conn <- open dbPath
+                    let lessonT = T.pack (show r) :: T.Text
+                    rust <- query conn "SELECT * FROM lesson WHERE lesson = ?" (Only lessonT) :: IO [Lesson]
+                    if null rust then do
+                        newDate <- getNewDate T
+                        addLesson conn (Lesson
+                            (T.pack (show r))
+                            (getNewLevel T)
+                            (T.pack (showGregorian newDate)))
+                    else
+                        do
+                            let selectedLesson = head rust
+                            newDate <- getNewDate (getLevel selectedLesson)
+                            executeNamed conn "UPDATE lesson SET level = :level, due_date = :due_date WHERE lesson = :lesson"
+                                [ ":level" := (getNewLevel (getLevel selectedLesson) :: Shortcut)
+                                , ":due_date" := T.pack (show newDate)
+                                , ":lesson" := (T.pack (getLesson selectedLesson) :: T.Text)]
+                    close conn
     Nothing -> todo'
+
+getNewDate :: Shortcut -> IO Day
+getNewDate level = do
+    now <- getCurrentTime
+    let (year, month, day) = toGregorian (utctDay now)
+    case level of
+        T -> return $ addDays 4 (fromGregorian year month day)
+        A -> return $ addDays 9 (fromGregorian year month day)
+        G -> return $ addDays 13 (fromGregorian year month day)
+        M -> return $ addDays 21 (fromGregorian year month day)
+        E -> return $ addDays 34 (fromGregorian year month day)
+        B -> return $ addDays 55 (fromGregorian year month day)
+
+getNewLevel :: Shortcut -> Shortcut
+getNewLevel level =
+    case level of
+        T -> A
+        A -> G
+        G -> M
+        M -> E
+        E -> B
+        B -> B
 
 count' :: IO ()
 count' = putStrLn "2"
 
 todo' :: IO ()
-todo' = putStrLn "Todo: "
+todo' = do
+    stdoutSupportsANSI <- hSupportsANSI stdout
+    if stdoutSupportsANSI
+        then do
+            setSGR [ nothing ]
+            putStrLn "Todo: "
+            setSGR [ bold, green ]
+            putStrLn "Green"
+            setSGR [ bold, blue ]
+            putStrLn "BLUE"
+            setSGR [ bold, magenta ]
+            putStrLn "MAGENTA"
+            setSGR [ bold, yellow ]
+            putStrLn "YELLOW"
+            setSGR [ bold, black ]
+            putStrLn "black"
+            setSGR [ nothing ]
+            putStrLn "nothing"
+        else
+            showNotSupportedMsg
+
+showNotSupportedMsg :: IO ()
+showNotSupportedMsg = putStrLn "Standard output does not support 'ANSI' escape codes."
 
 view' :: IO ()
 view' = putStrLn "Overview of all lessons: "

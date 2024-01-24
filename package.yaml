@@ -20,11 +20,13 @@ extra-source-files:
 description:         Please see the README on GitHub at <https://github.com/bendo/gram-hs#readme>
 
 dependencies:
+- ansi-terminal
 - base >= 4.7 && < 5
 - directory
 - optparse-applicative
 - sqlite-simple
 - text
+- time
 
 ghc-options:
 - -Wall
