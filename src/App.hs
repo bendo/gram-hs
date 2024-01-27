@@ -6,16 +6,18 @@ module App
     ) where
 
 import           Control.Applicative
-import qualified Data.Text                      as T
+import           Data.Data                        (Typeable)
+import           Data.Foldable
+import qualified Data.Text                        as T
 import           Data.Time
 import           Database.SQLite.Simple
-import           Database.SQLite.Simple.ToField
 import           Database.SQLite.Simple.FromField
+import           Database.SQLite.Simple.ToField
 import           Options.Applicative
 import           System.Console.ANSI
 import           System.Directory
-import           System.IO                      (stdout)
-import Data.Data (Typeable)
+import           System.IO                        (stdout)
+import           Text.Printf
 
 appHead :: String
 appHead = "Grammatik Aktiv SRS system"
@@ -144,28 +146,26 @@ add' lesson = case lesson of
         if r < 1 || r > 80
             then
                 putStrLn "Lesson has to be in interval 1 to 80."
-            else
-                do
-                    putStrLn $ "Adding lesson " ++ show r ++ "."
-                    dbPath <- getDBPath
-                    conn <- open dbPath
-                    let lessonT = T.pack (show r) :: T.Text
-                    rust <- query conn "SELECT * FROM lesson WHERE lesson = ?" (Only lessonT) :: IO [Lesson]
-                    if null rust then do
-                        newDate <- getNewDate T
-                        addLesson conn (Lesson
-                            (T.pack (show r))
-                            (getNewLevel T)
-                            (T.pack (showGregorian newDate)))
-                    else
-                        do
-                            let selectedLesson = head rust
-                            newDate <- getNewDate (getLevel selectedLesson)
-                            executeNamed conn "UPDATE lesson SET level = :level, due_date = :due_date WHERE lesson = :lesson"
-                                [ ":level" := (getNewLevel (getLevel selectedLesson) :: Shortcut)
-                                , ":due_date" := T.pack (show newDate)
-                                , ":lesson" := (T.pack (getLesson selectedLesson) :: T.Text)]
-                    close conn
+            else do
+                putStrLn $ "Adding lesson " ++ show r ++ "."
+                dbPath <- getDBPath
+                conn <- open dbPath
+                let lessonT = T.pack (show r) :: T.Text
+                rust <- query conn "SELECT * FROM lesson WHERE lesson = ?" (Only lessonT) :: IO [Lesson]
+                if null rust then do
+                    newDate <- getNewDate T
+                    addLesson conn (Lesson
+                        (T.pack (show r))
+                        (getNewLevel T)
+                        (T.pack (showGregorian newDate)))
+                else do
+                    let selectedLesson = head rust
+                    newDate <- getNewDate (getLevel selectedLesson)
+                    executeNamed conn "UPDATE lesson SET level = :level, due_date = :due_date WHERE lesson = :lesson"
+                        [ ":level" := (getNewLevel (getLevel selectedLesson) :: Shortcut)
+                        , ":due_date" := T.pack (show newDate)
+                        , ":lesson" := (T.pack (getLesson selectedLesson) :: T.Text)]
+                close conn
     Nothing -> todo'
 
 getNewDate :: Shortcut -> IO Day
@@ -219,4 +219,12 @@ showNotSupportedMsg :: IO ()
 showNotSupportedMsg = putStrLn "Standard output does not support 'ANSI' escape codes."
 
 view' :: IO ()
-view' = putStrLn "Overview of all lessons: "
+view' = do
+        setSGR [ bold ]
+        putStrLn "\nLessons overview:\n"
+        setSGR [ nothing ]
+        forM_ [1..80 :: Int] printLesson
+        putStrLn "\nAll levels\n"
+
+printLesson :: (PrintfArg a, Integral a) => a -> IO ()
+printLesson lesson = putStr $ Text.Printf.printf "%02d" lesson ++ (if mod lesson 20 == 0 then "  \n" else "  ")
