@@ -57,27 +57,24 @@ instance FromField Shortcut where
 
 data Name = TODO | APPRENTICE | GURU | MASTER | ENLIGHTENED | BURNED deriving Show
 
-data Level = Level Shortcut Name SGR deriving Show
-
+myColor :: Color -> SGR
 myColor = SetColor Foreground Dull
 
+bold :: SGR
 bold = SetConsoleIntensity BoldIntensity
 
+magenta :: SGR
 magenta = myColor Magenta
+yellow :: SGR
 yellow = myColor Yellow
+green :: SGR
 green = myColor Green
+blue :: SGR
 blue = myColor Blue
+black :: SGR
 black = myColor Black
+nothing :: SGR
 nothing = Reset
-
-getShortcut :: Level -> Shortcut
-getShortcut (Level shortcut _ _) = shortcut
-
-getName :: Level -> Name
-getName (Level _ name _) = name
-
-getColor :: Level -> SGR
-getColor (Level _ _ color) = color
 
 data Options = Options
     { add   :: Maybe String
@@ -184,7 +181,13 @@ getNewLevel level =
         B -> B
 
 count' :: IO ()
-count' = putStrLn "2"
+count' = do
+    dbPath <- getDBPath
+    conn <- open dbPath
+    now <- getCurrentTime
+    ls <- query conn "SELECT COUNT(*) FROM lesson WHERE due_date <= ?" (Only $ utctDay now) :: IO [Only Int]
+    forM_ ls $ \(Only count'') -> print count''
+    close conn
 
 todo' :: IO ()
 todo' = do
@@ -198,6 +201,7 @@ todo' = do
             setSGR [ nothing ]
             putStr "Todo: "
             forM_ todoLessons printTODOLesson
+            close conn
         else
             showNotSupportedMsg
 
