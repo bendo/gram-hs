@@ -70,13 +70,6 @@ blue = myColor Blue
 black = myColor Black
 nothing = Reset
 
-levelT = Level T TODO nothing
-levelA = Level A APPRENTICE magenta
-levelG = Level G GURU yellow
-levelM = Level M MASTER green
-levelE = Level E ENLIGHTENED blue
-levelB = Level B BURNED black
-
 getShortcut :: Level -> Shortcut
 getShortcut (Level shortcut _ _) = shortcut
 
@@ -198,33 +191,42 @@ todo' = do
     stdoutSupportsANSI <- hSupportsANSI stdout
     if stdoutSupportsANSI
         then do
+            dbPath <- getDBPath
+            conn <- open dbPath
+            now <- getCurrentTime
+            todoLessons <- query conn "SELECT * FROM lesson WHERE due_date <= ?" (Only $ utctDay now) :: IO [Lesson]
             setSGR [ nothing ]
-            putStrLn "Todo: "
-            setSGR [ bold, green ]
-            putStrLn "Green"
-            setSGR [ bold, blue ]
-            putStrLn "BLUE"
-            setSGR [ bold, magenta ]
-            putStrLn "MAGENTA"
-            setSGR [ bold, yellow ]
-            putStrLn "YELLOW"
-            setSGR [ bold, black ]
-            putStrLn "black"
-            setSGR [ nothing ]
-            putStrLn "nothing"
+            putStr "Todo: "
+            forM_ todoLessons printTODOLesson
         else
             showNotSupportedMsg
+
+printTODOLesson :: Lesson -> IO ()
+printTODOLesson lesson = do
+    setColorForLevel (getLevel lesson)
+    putStr $ getLesson lesson ++ " "
+    setSGR [ nothing ]
+
+setColorForLevel :: Shortcut -> IO ()
+setColorForLevel level =
+    case level of
+        T -> setSGR [ nothing ]
+        A -> setSGR [ magenta ]
+        G -> setSGR [ yellow ]
+        M -> setSGR [ green ]
+        E -> setSGR [ blue ]
+        B -> setSGR [ black ]
 
 showNotSupportedMsg :: IO ()
 showNotSupportedMsg = putStrLn "Standard output does not support 'ANSI' escape codes."
 
 view' :: IO ()
 view' = do
-        setSGR [ bold ]
-        putStrLn "\nLessons overview:\n"
-        setSGR [ nothing ]
-        forM_ [1..80 :: Int] printLesson
-        putStrLn "\nAll levels\n"
+    setSGR [ bold ]
+    putStrLn "\nLessons overview:\n"
+    setSGR [ nothing ]
+    forM_ [1..80 :: Int] printLesson
+    putStrLn "\nAll levels\n"
 
 printLesson :: (PrintfArg a, Integral a) => a -> IO ()
 printLesson lesson = putStr $ Text.Printf.printf "%02d" lesson ++ (if mod lesson 20 == 0 then "  \n" else "  ")
