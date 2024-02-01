@@ -57,25 +57,6 @@ instance FromField Shortcut where
 
 data Name = TODO | APPRENTICE | GURU | MASTER | ENLIGHTENED | BURNED deriving Show
 
-myColor :: Color -> SGR
-myColor = SetColor Foreground Dull
-
-bold :: SGR
-bold = SetConsoleIntensity BoldIntensity
-
-magenta :: SGR
-magenta = myColor Magenta
-yellow :: SGR
-yellow = myColor Yellow
-green :: SGR
-green = myColor Green
-blue :: SGR
-blue = myColor Blue
-black :: SGR
-black = myColor Black
-nothing :: SGR
-nothing = Reset
-
 data Options = Options
     { add   :: Maybe String
     , count :: Bool
@@ -198,7 +179,7 @@ todo' = do
             conn <- open dbPath
             now <- getCurrentTime
             todoLessons <- query conn "SELECT * FROM lesson WHERE due_date <= ?" (Only $ utctDay now) :: IO [Lesson]
-            setSGR [ nothing ]
+            setSGR [ Reset ]
             putStr "Todo: "
             forM_ todoLessons printTODOLesson
             close conn
@@ -209,26 +190,26 @@ printTODOLesson :: Lesson -> IO ()
 printTODOLesson lesson = do
     setColorForLevel (getLevel lesson)
     putStr $ getLesson lesson ++ " "
-    setSGR [ nothing ]
+    setSGR [ Reset ]
 
 setColorForLevel :: Shortcut -> IO ()
 setColorForLevel level =
     case level of
-        T -> setSGR [ nothing ]
-        A -> setSGR [ magenta ]
-        G -> setSGR [ yellow ]
-        M -> setSGR [ green ]
-        E -> setSGR [ blue ]
-        B -> setSGR [ black ]
+        T -> setSGR [ Reset ]
+        A -> setSGR [ SetColor Foreground Dull Magenta ]
+        G -> setSGR [ SetColor Foreground Dull Yellow ]
+        M -> setSGR [ SetColor Foreground Dull Green ]
+        E -> setSGR [ SetColor Foreground Dull Blue ]
+        B -> setSGR [ SetColor Foreground Dull Black ]
 
 showNotSupportedMsg :: IO ()
 showNotSupportedMsg = putStrLn "Standard output does not support 'ANSI' escape codes."
 
 view' :: IO ()
 view' = do
-    setSGR [ bold ]
+    setSGR [ SetConsoleIntensity BoldIntensity ]
     putStrLn "\nLessons overview:\n"
-    setSGR [ nothing ]
+    setSGR [ Reset ]
     forM_ [1..80 :: Int] printLesson
     putStrLn "\nAll levels\n"
 
