@@ -18,6 +18,7 @@ import           System.Console.ANSI
 import           System.Directory
 import           System.IO                        (stdout)
 import           Text.Printf
+import           Text.Read
 
 appHead :: String
 appHead = "Grammatik Aktiv SRS system"
@@ -112,31 +113,34 @@ getDueDate (Lesson _ _ dueDate) = T.unpack dueDate
 
 add' :: Maybe String -> IO ()
 add' lesson = case lesson of
-    Just l  -> do
-        let r = read l :: Int
-        if r < 1 || r > 80
-            then
-                putStrLn "Lesson has to be in interval 1 to 80."
-            else do
-                putStrLn $ "Adding lesson " ++ show r ++ "."
-                dbPath <- getDBPath
-                conn <- open dbPath
-                let lessonT = T.pack (show r) :: T.Text
-                rust <- query conn "SELECT * FROM lesson WHERE lesson = ?" (Only lessonT) :: IO [Lesson]
-                if null rust then do
-                    newDate <- getNewDate T
-                    addLesson conn (Lesson
-                        (T.pack (show r))
-                        (getNewLevel T)
-                        (T.pack (showGregorian newDate)))
-                else do
-                    let selectedLesson = head rust
-                    newDate <- getNewDate (getLevel selectedLesson)
-                    executeNamed conn "UPDATE lesson SET level = :level, due_date = :due_date WHERE lesson = :lesson"
-                        [ ":level" := (getNewLevel (getLevel selectedLesson) :: Shortcut)
-                        , ":due_date" := T.pack (show newDate)
-                        , ":lesson" := (T.pack (getLesson selectedLesson) :: T.Text)]
-                close conn
+    Just l -> do
+        let r = readMaybe l :: Maybe Int
+        case r of
+            Just ri ->
+                if ri < 1 || ri > 80
+                    then
+                        putStrLn "Lesson has to be in interval 1 to 80."
+                    else do
+                        putStrLn $ "Adding lesson " ++ show ri ++ "."
+                        dbPath <- getDBPath
+                        conn <- open dbPath
+                        let lessonT = T.pack (show ri) :: T.Text
+                        rust <- query conn "SELECT * FROM lesson WHERE lesson = ?" (Only lessonT) :: IO [Lesson]
+                        if null rust then do
+                            newDate <- getNewDate T
+                            addLesson conn (Lesson
+                                (T.pack (show ri))
+                                (getNewLevel T)
+                                (T.pack (showGregorian newDate)))
+                        else do
+                            let selectedLesson = head rust
+                            newDate <- getNewDate (getLevel selectedLesson)
+                            executeNamed conn "UPDATE lesson SET level = :level, due_date = :due_date WHERE lesson = :lesson"
+                                [ ":level" := (getNewLevel (getLevel selectedLesson) :: Shortcut)
+                                , ":due_date" := T.pack (show newDate)
+                                , ":lesson" := (T.pack (getLesson selectedLesson) :: T.Text)]
+                        close conn
+            Nothing -> putStrLn "Lesson has to be a number in interval 1 to 80."
     Nothing -> todo'
 
 getNewDate :: Shortcut -> IO Day
@@ -207,11 +211,26 @@ showNotSupportedMsg = putStrLn "Standard output does not support 'ANSI' escape c
 
 view' :: IO ()
 view' = do
+    dbPath <- getDBPath
+    conn <- open dbPath
+    lessons <- query conn "SELECT * FROM lesson" () :: IO [Lesson]
     setSGR [ SetConsoleIntensity BoldIntensity ]
     putStrLn "\nLessons overview:\n"
     setSGR [ Reset ]
-    forM_ [1..80 :: Int] printLesson
+    let pairs = [(getLesson x, x) | x <- lessons]
+    forM_ [1..80] (\a -> do
+            let result = find ((== show a).fst) pairs
+            case result of
+                Just r -> do
+                    let lala = snd r
+                    setColorForLevel (getLevel lala)
+                    printLesson (read (getLesson lala) :: Integer) a
+                    setSGR [ Reset ]
+                Nothing ->
+                    printLesson (a :: Integer) a
+            )
     putStrLn "\nAll levels\n"
+    close conn
 
-printLesson :: (PrintfArg a, Integral a) => a -> IO ()
-printLesson lesson = putStr $ Text.Printf.printf "%02d" lesson ++ (if mod lesson 20 == 0 then "  \n" else "  ")
+printLesson :: (PrintfArg t, Integral a) => t -> a -> IO ()
+printLesson x a = putStr $ Text.Printf.printf "%02d" x ++ (if mod a 20 == 0 then "  \n" else "  ")
