@@ -170,7 +170,7 @@ count' = do
     dbPath <- getDBPath
     conn <- open dbPath
     now <- getCurrentTime
-    ls <- query conn "SELECT COUNT(*) FROM lesson WHERE due_date <= ?" (Only $ utctDay now) :: IO [Only Int]
+    ls <- query conn "SELECT COUNT(*) FROM lesson WHERE level != 'B' AND due_date <= ?" (Only $ utctDay now) :: IO [Only Int]
     forM_ ls $ \(Only count'') -> print count''
     close conn
 
@@ -182,7 +182,7 @@ todo' = do
             dbPath <- getDBPath
             conn <- open dbPath
             now <- getCurrentTime
-            todoLessons <- query conn "SELECT * FROM lesson WHERE due_date <= ?" (Only $ utctDay now) :: IO [Lesson]
+            todoLessons <- query conn "SELECT * FROM lesson WHERE level != 'B' AND due_date <= ?" (Only $ utctDay now) :: IO [Lesson]
             setSGR [ Reset ]
             putStr "Todo: "
             forM_ todoLessons printTODOLesson
