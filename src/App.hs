@@ -58,12 +58,7 @@ instance FromField Shortcut where
 
 data Name = TODO | APPRENTICE | GURU | MASTER | ENLIGHTENED | BURNED deriving Show
 
-data Options = Options
-    { add   :: Maybe String
-    , count :: Bool
-    , todo  :: Bool
-    , view  :: Bool
-    }
+data Options = Options (Maybe String) Bool Bool Bool deriving Show
 
 gram :: Parser Options
 gram = Options
@@ -96,10 +91,10 @@ addLesson :: ToRow q => Connection -> q -> IO ()
 addLesson conn = execute conn "INSERT INTO lesson (lesson, level, due_date) VALUES (?,?,?)"
 
 prompt :: Options -> IO ()
-prompt (Options lesson False False False) = add' lesson
-prompt (Options _ True False False)       = count'
-prompt (Options _ False True False)       = todo'
-prompt (Options _ False False True)       = view'
+prompt (Options lesson False False False) = add lesson
+prompt (Options _ True False False)       = count
+prompt (Options _ False True False)       = todo
+prompt (Options _ False False True)       = view
 prompt _                                  = return ()
 
 getLesson :: Lesson -> String
@@ -108,11 +103,8 @@ getLesson (Lesson lesson _ _) = T.unpack lesson
 getLevel :: Lesson -> Shortcut
 getLevel (Lesson _ level _) = level
 
-getDueDate :: Lesson -> String
-getDueDate (Lesson _ _ dueDate) = T.unpack dueDate
-
-add' :: Maybe String -> IO ()
-add' lesson = case lesson of
+add :: Maybe String -> IO ()
+add lesson = case lesson of
     Just l -> do
         let r = readMaybe l :: Maybe Int
         case r of
@@ -141,7 +133,7 @@ add' lesson = case lesson of
                                 , ":lesson" := (T.pack (getLesson selectedLesson) :: T.Text)]
                         close conn
             Nothing -> putStrLn "Lesson has to be a number in interval 1 to 80."
-    Nothing -> todo'
+    Nothing -> todo
 
 getNewDate :: Shortcut -> IO Day
 getNewDate level = do
@@ -166,8 +158,8 @@ getNewLevel level =
         E -> B
         B -> B
 
-count' :: IO ()
-count' = do
+count :: IO ()
+count = do
     dbPath <- getDBPath
     conn <- open dbPath
     now <- getCurrentTime
@@ -175,8 +167,8 @@ count' = do
     forM_ ls $ \(Only count'') -> print count''
     close conn
 
-todo' :: IO ()
-todo' = do
+todo :: IO ()
+todo = do
     stdoutSupportsANSI <- hSupportsANSI stdout
     if stdoutSupportsANSI
         then do
@@ -210,8 +202,8 @@ setColorForLevel level =
 showNotSupportedMsg :: IO ()
 showNotSupportedMsg = putStrLn "Standard output does not support 'ANSI' escape codes."
 
-view' :: IO ()
-view' = do
+view :: IO ()
+view = do
     dbPath <- getDBPath
     conn <- open dbPath
     lessons <- query conn "SELECT * FROM lesson" () :: IO [Lesson]
