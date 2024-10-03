@@ -148,12 +148,13 @@ getNewDate level = do
     now <- getCurrentTime
     let (year, month, day) = toGregorian (utctDay now)
     case level of
-        T -> return $ addDays 4 (fromGregorian year month day)
-        A -> return $ addDays 9 (fromGregorian year month day)
-        G -> return $ addDays 13 (fromGregorian year month day)
-        M -> return $ addDays 21 (fromGregorian year month day)
-        E -> return $ addDays 34 (fromGregorian year month day)
-        B -> return $ addDays 55 (fromGregorian year month day)
+        T -> addXDays 4 year month day
+        A -> addXDays 9 year month day
+        G -> addXDays 13 year month day
+        M -> addXDays 21 year month day
+        E -> addXDays 34 year month day
+        B -> addXDays 55 year month day
+    where addXDays x y m d = return $ addDays x (fromGregorian y m d)
 
 getNewLevel :: Shortcut -> Shortcut
 getNewLevel level =
@@ -229,8 +230,18 @@ view' = do
                 Nothing ->
                     printLesson (a :: Integer) a
             )
-    putStrLn "\nAll levels\n"
+    putStrLn ""
+    mapM_ (printLevel lessons) [(T,TODO), (A,APPRENTICE), (G,GURU), (M,MASTER), (E,ENLIGHTENED), (B,BURNED)]
+    putStrLn ""
     close conn
+
+printLevel :: Show a => [Lesson] -> (Shortcut, a) -> IO ()
+printLevel lessons level = do
+    let levels = [getLevel x | x <- lessons]
+    let lvlCount = length $ filter (fst level ==) levels
+    setColorForLevel $ fst level
+    putStr $ show (snd level) ++ " (" ++ show lvlCount ++ ")   "
+    setSGR [ Reset ]
 
 printLesson :: (PrintfArg t, Integral a) => t -> a -> IO ()
 printLesson x a = putStr $ Text.Printf.printf "%02d" x ++ (if mod a 20 == 0 then "  \n" else "  ")
