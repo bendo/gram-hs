@@ -109,29 +109,28 @@ add lesson = case lesson of
         let r = readMaybe l :: Maybe Int
         case r of
             Just ri ->
-                if ri < 1 || ri > 80
-                    then
-                        putStrLn "Lesson has to be in interval 1 to 80."
+                if ri < 1 || ri > 80 then
+                    putStrLn "Lesson has to be in interval 1 to 80."
+                else do
+                    putStrLn $ "Adding lesson " ++ show ri ++ "."
+                    dbPath <- getDBPath
+                    conn <- open dbPath
+                    let lessonT = T.pack (show ri) :: T.Text
+                    rust <- query conn "SELECT * FROM lesson WHERE lesson = ?" (Only lessonT) :: IO [Lesson]
+                    if null rust then do
+                        newDate <- getNewDate T
+                        addLesson conn (Lesson
+                            (T.pack (show ri))
+                            (getNewLevel T)
+                            (T.pack (showGregorian newDate)))
                     else do
-                        putStrLn $ "Adding lesson " ++ show ri ++ "."
-                        dbPath <- getDBPath
-                        conn <- open dbPath
-                        let lessonT = T.pack (show ri) :: T.Text
-                        rust <- query conn "SELECT * FROM lesson WHERE lesson = ?" (Only lessonT) :: IO [Lesson]
-                        if null rust then do
-                            newDate <- getNewDate T
-                            addLesson conn (Lesson
-                                (T.pack (show ri))
-                                (getNewLevel T)
-                                (T.pack (showGregorian newDate)))
-                        else do
-                            let selectedLesson = head rust
-                            newDate <- getNewDate (getLevel selectedLesson)
-                            executeNamed conn "UPDATE lesson SET level = :level, due_date = :due_date WHERE lesson = :lesson"
-                                [ ":level" := (getNewLevel (getLevel selectedLesson) :: Shortcut)
-                                , ":due_date" := T.pack (show newDate)
-                                , ":lesson" := (T.pack (getLesson selectedLesson) :: T.Text)]
-                        close conn
+                        let selectedLesson = head rust
+                        newDate <- getNewDate (getLevel selectedLesson)
+                        executeNamed conn "UPDATE lesson SET level = :level, due_date = :due_date WHERE lesson = :lesson"
+                            [ ":level" := (getNewLevel (getLevel selectedLesson) :: Shortcut)
+                            , ":due_date" := T.pack (show newDate)
+                            , ":lesson" := (T.pack (getLesson selectedLesson) :: T.Text)]
+                    close conn
             Nothing -> putStrLn "Lesson has to be a number in interval 1 to 80."
     Nothing -> todo
 
@@ -170,19 +169,18 @@ count = do
 todo :: IO ()
 todo = do
     stdoutSupportsANSI <- hSupportsANSI stdout
-    if stdoutSupportsANSI
-        then do
-            dbPath <- getDBPath
-            conn <- open dbPath
-            now <- getCurrentTime
-            todoLessons <- query conn "SELECT * FROM lesson WHERE level != 'B' AND due_date <= ?" (Only $ utctDay now) :: IO [Lesson]
-            setSGR [ Reset ]
-            putStr "Todo: "
-            forM_ todoLessons printTODOLesson
-            putStrLn ""
-            close conn
-        else
-            showNotSupportedMsg
+    if stdoutSupportsANSI then do
+        dbPath <- getDBPath
+        conn <- open dbPath
+        now <- getCurrentTime
+        todoLessons <- query conn "SELECT * FROM lesson WHERE level != 'B' AND due_date <= ?" (Only $ utctDay now) :: IO [Lesson]
+        setSGR [ Reset ]
+        putStr "Todo: "
+        forM_ todoLessons printTODOLesson
+        putStrLn ""
+        close conn
+    else
+        showNotSupportedMsg
 
 printTODOLesson :: Lesson -> IO ()
 printTODOLesson lesson = do
