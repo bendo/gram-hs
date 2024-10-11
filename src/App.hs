@@ -179,6 +179,7 @@ todo = do
             setSGR [ Reset ]
             putStr "Todo: "
             forM_ todoLessons printTODOLesson
+            putStrLn ""
             close conn
         else
             showNotSupportedMsg
