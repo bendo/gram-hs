@@ -223,13 +223,15 @@ view = do
             )
     putStrLn ""
     mapM_ (printLevel lessons) [(T,TODO), (A,APPRENTICE), (G,GURU), (M,MASTER), (E,ENLIGHTENED), (B,BURNED)]
-    putStrLn ""
+    putStrLn "\n"
     close conn
 
 printLevel :: Show a => [Lesson] -> (Shortcut, a) -> IO ()
 printLevel lessons level = do
     let levels = [getLevel x | x <- lessons]
-    let lvlCount = length $ filter (fst level ==) levels
+    let lvlCount = case fst level of
+                     T -> 80 - length (filter (T /=) levels)
+                     _ -> length $ filter (fst level ==) levels
     setColorForLevel $ fst level
     putStr $ show (snd level) ++ " (" ++ show lvlCount ++ ")   "
     setSGR [ Reset ]
